@@ -1,6 +1,9 @@
 // electron/main.cjs
 const { app, BrowserWindow, session, Menu, globalShortcut, Tray, nativeImage } = require('electron');
 const path = require('path');
+const fs = require('fs');
+// Importar el módulo de actualización
+const updater = require('./updater.cjs');
 
 let mainWindow;
 let tray = null;
@@ -34,7 +37,7 @@ async function createWindow() {
     width: 1200,
     height: 800,
     title: 'Dogito Music',
-    icon: path.join(__dirname, 'public/favicon.ico'),
+    icon: findIcon(),
     webPreferences: {
       webViewTag: true,
       nodeIntegration: false,
@@ -61,6 +64,51 @@ async function createWindow() {
   mainWindow.on('closed', function () {
     mainWindow = null;
   });
+  
+  // Inicializar el actualizador automático
+  updater.initUpdater(mainWindow);
+}
+
+// Función para buscar un icono válido
+function findIcon() {
+  console.log("Buscando iconos válidos...");
+  
+  // Lista de posibles rutas de iconos
+  const possibleIconPaths = [
+    // Rutas en producción
+    path.join(app.getAppPath(), 'dist/favicon.ico'),
+    path.join(app.getAppPath(), 'dist/icon.ico'),
+    path.join(app.getAppPath(), 'dist/icon.png'),
+    // Rutas en desarrollo
+    path.join(app.getAppPath(), 'public/favicon.ico'),
+    path.join(app.getAppPath(), 'public/icon.ico'),
+    path.join(app.getAppPath(), 'public/icon.png'),
+    path.join(app.getAppPath(), 'public/icon.svg'),
+    // Rutas relativas
+    path.join(__dirname, 'public/favicon.ico'),
+    path.join(__dirname, 'public/icon.ico'),
+    path.join(__dirname, 'public/icon.png'),
+    path.join(__dirname, 'public/icon.svg'),
+    path.join(__dirname, '../public/favicon.ico'),
+    path.join(__dirname, '../public/icon.ico'),
+    path.join(__dirname, '../public/icon.png'),
+    path.join(__dirname, '../public/icon.svg'),
+  ];
+
+  // Buscar el primer icono existente
+  for (const iconPath of possibleIconPaths) {
+    try {
+      if (fs.existsSync(iconPath)) {
+        console.log(`Icono encontrado: ${iconPath}`);
+        return iconPath;
+      }
+    } catch (err) {
+      console.warn(`Error verificando ruta ${iconPath}: ${err.message}`);
+    }
+  }
+
+  console.warn("No se encontró ningún icono válido");
+  return null;
 }
 
 // Ejecutar acciones de control multimedia
@@ -78,59 +126,56 @@ function executeMediaAction(selector) {
 
 function createTray() {
   try {
-    // Logs para depuración
-    console.log('Directorio actual:', __dirname);
+    console.log("Iniciando creación del tray...");
     
-    // Definir múltiples rutas posibles para el icono
-    const iconPaths = [
-      path.join(__dirname, 'public', 'favicon.ico'),
-      path.join(__dirname, 'public', 'favicon.png'),
-      path.join(__dirname, 'public', 'icon.ico'),
-      path.join(__dirname, 'public', 'icon.png'),
-      path.join(__dirname, 'favicon.ico'),
-      path.join(__dirname, 'icon.ico')
-    ];
-    
-    // Comprobar qué archivos existen
-    const fs = require('fs');
-    console.log('Comprobando archivos de icono:');
-    
-    // Inicializar el icono como vacío
-    let trayIcon = nativeImage.createEmpty();
-    let iconFound = false;
-    
-    // Intentar cargar el primer icono que exista
-    for (const iconPath of iconPaths) {
-      if (fs.existsSync(iconPath)) {
-        console.log(`Archivo encontrado: ${iconPath}`);
-        try {
-          const icon = nativeImage.createFromPath(iconPath);
-          if (!icon.isEmpty()) {
-            trayIcon = icon;
-            iconFound = true;
-            console.log(`Usando icono: ${iconPath}`);
-            break;
-          } else {
-            console.log(`Icono vacío: ${iconPath}`);
-          }
-        } catch (err) {
-          console.error(`Error al cargar el icono ${iconPath}:`, err);
-        }
-      } else {
-        console.log(`Archivo no encontrado: ${iconPath}`);
-      }
+    // Si ya existe un tray, no crear uno nuevo
+    if (tray !== null) {
+      console.log("Tray ya existe, no se creará uno nuevo");
+      return;
     }
+
+    // Buscar un icono válido
+    const iconPath = findIcon();
     
-    // Si no se encontró ningún icono, crear uno básico
-    if (!iconFound) {
-      console.log('Creando icono predeterminado...');
+    // Si no se encuentra icono, intentar crear uno predeterminado
+    let trayIcon;
+    if (iconPath) {
+      console.log(`Creando tray con icono: ${iconPath}`);
+      trayIcon = nativeImage.createFromPath(iconPath);
       
-      // Crear un icono básico con un dataURL
-      const dataUrl = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAAyJpVFh0WE1MOmNvbS5hZG9iZS54bXAAAAAAADw/eHBhY2tldCBiZWdpbj0i77u/IiBpZD0iVzVNME1wQ2VoaUh6cmVTek5UY3prYzlkIj8+IDx4OnhtcG1ldGEgeG1sbnM6eD0iYWRvYmU6bnM6bWV0YS8iIHg6eG1wdGs9IkFkb2JlIFhNUCBDb3JlIDUuMy1jMDExIDY2LjE0NTY2MSwgMjAxMi8wMi8wNi0xNDo1NjoyNyAgICAgICAgIj4gPHJkZjpSREYgeG1sbnM6cmRmPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5LzAyLzIyLXJkZi1zeW50YXgtbnMjIj4gPHJkZjpEZXNjcmlwdGlvbiByZGY6YWJvdXQ9IiIgeG1sbnM6eG1wPSJodHRwOi8vbnMuYWRvYmUuY29tL3hhcC8xLjAvIiB4bWxuczp4bXBNTT0iaHR0cDovL25zLmFkb2JlLmNvbS94YXAvMS4wL21tLyIgeG1sbnM6c3RSZWY9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC9zVHlwZS9SZXNvdXJjZVJlZiMiIHhtcDpDcmVhdG9yVG9vbD0iQWRvYmUgUGhvdG9zaG9wIENTNiAoV2luZG93cykiIHhtcE1NOkluc3RhbmNlSUQ9InhtcC5paWQ6Qjg0OTk4QzMyMUE3MTFFQTk2N0JDQzU0OTUzMzlEMzYiIHhtcE1NOkRvY3VtZW50SUQ9InhtcC5kaWQ6Qjg0OTk4QzQyMUE3MTFFQTk2N0JDQzU0OTUzMzlEMzYiPiA8eG1wTU06RGVyaXZlZEZyb20gc3RSZWY6aW5zdGFuY2VJRD0ieG1wLmlpZDpCODQ5OThDMTIxQTcxMUVBOTY3QkNDNTQ5NTMzOUQzNiIgc3RSZWY6ZG9jdW1lbnRJRD0ieG1wLmRpZDpCODQ5OThDMjIxQTcxMUVBOTY3QkNDNTQ5NTMzOUQzNiIvPiA8L3JkZjpEZXNjcmlwdGlvbj4gPC9yZGY6UkRGPiA8L3g6eG1wbWV0YT4gPD94cGFja2V0IGVuZD0iciI/PtZgZTAAAADGSURBVHjaYvz//z8DJYCJgULAYmRk9B9dHF0NLi0Qn9XY2NgAyW8A0gJQ/IAxKCiIgYWVlYGVlVUASP8HYoH///8bsLOzmzMxMRnIycn9FxISEmBmZjZ4+fLlf3l5+f9Pnjz5D1TDANX0H2IGSKGUlNR/QUHB/2xsbP8ZoQYLAA0SYKQULF26FOwSFRWV/7KysmA+yHCQ2KVLl+CGCQsLg1VCaQMWdnZ2cICxsrKCXQKyEWTPt2/fDJiAXgEpBpoLjkYGKgIAAQYA9gZt3uIoQEMAAAAASUVORK5CYII=';
-      trayIcon = nativeImage.createFromDataURL(dataUrl);
+      // Verificar que la imagen no esté vacía
+      if (trayIcon.isEmpty()) {
+        console.warn("El icono cargado está vacío, intentando alternativas...");
+        
+        // Buscar otros formatos en la misma ubicación
+        const dir = path.dirname(iconPath);
+        const possibleAlternatives = ['favicon.png', 'icon.png', 'app.png', 'logo.png', 'icon.svg'];
+        
+        let foundAlternative = false;
+        for (const alt of possibleAlternatives) {
+          const altPath = path.join(dir, alt);
+          if (fs.existsSync(altPath)) {
+            console.log(`Intentando con alternativa: ${altPath}`);
+            trayIcon = nativeImage.createFromPath(altPath);
+            if (!trayIcon.isEmpty()) {
+              foundAlternative = true;
+              break;
+            }
+          }
+        }
+        
+        if (!foundAlternative) {
+          // Si todas las alternativas fallan, crear un icono vacío
+          console.warn("No se pudo cargar un icono válido, usando icono predeterminado");
+          trayIcon = nativeImage.createEmpty();
+        }
+      }
+    } else {
+      console.warn("No se encontró ningún icono, usando icono predeterminado");
+      trayIcon = nativeImage.createEmpty();
     }
     
-    // Crear la bandeja del sistema con el icono seleccionado
+    // Crear la bandeja del sistema
     tray = new Tray(trayIcon);
     tray.setToolTip('Dogito Music');
     
@@ -140,7 +185,9 @@ function createTray() {
         label: 'Abrir Dogito Music', 
         click: () => {
           if (mainWindow) {
-            mainWindow.show();
+            if (mainWindow.isMinimized()) mainWindow.restore();
+            if (!mainWindow.isVisible()) mainWindow.show();
+            mainWindow.focus();
           } else {
             createWindow();
           }
@@ -166,6 +213,13 @@ function createTray() {
         }
       },
       { type: 'separator' },
+      {
+        label: 'Buscar actualizaciones',
+        click: () => {
+          updater.checkForUpdates();
+        }
+      },
+      { type: 'separator' },
       { 
         label: 'Salir', 
         click: () => {
@@ -180,15 +234,21 @@ function createTray() {
     // Mostrar la ventana al hacer clic en el icono de la bandeja
     tray.on('click', () => {
       if (mainWindow) {
-        mainWindow.isVisible() ? mainWindow.hide() : mainWindow.show();
+        if (mainWindow.isVisible()) {
+          mainWindow.hide();
+        } else {
+          mainWindow.show();
+          mainWindow.focus();
+        }
       } else {
         createWindow();
       }
     });
     
-    console.log('System tray creado exitosamente');
-  } catch (err) {
-    console.error('Error creating tray:', err);
+    console.log("Bandeja del sistema creada con éxito");
+  } catch (error) {
+    console.error("Error al crear la bandeja del sistema:", error);
+    // Continuar sin la bandeja del sistema
   }
 }
 
@@ -211,24 +271,40 @@ function registerGlobalShortcuts() {
   }
 }
 
+// Este evento se dispara cuando Electron ha terminado la inicialización
 app.whenReady().then(() => {
   createWindow();
-  createTray();
   registerGlobalShortcuts();
+  
+  // Retrasar la creación del tray para asegurar que la app esté completamente lista
+  setTimeout(() => {
+    createTray();
+    console.log("Creación del tray programada después de timeout");
+  }, 1000);
+
+  app.on('activate', function () {
+    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+  });
 });
 
 app.on('window-all-closed', function () {
   if (process.platform !== 'darwin') {
-    // No cerramos la app, solo minimizamos a tray
+    // NO llamamos a app.quit() aquí para mantener la app en segundo plano con el tray
+    console.log("Todas las ventanas cerradas, pero aplicación sigue en segundo plano");
   }
 });
 
-app.on('activate', function () {
-  if (mainWindow === null) createWindow();
-});
-
-// Limpieza de recursos al salir
 app.on('before-quit', () => {
+  console.log("App cerrándose completamente");
   app.isQuitting = true;
   globalShortcut.unregisterAll();
+});
+
+app.on('quit', () => {
+  console.log("App cerrada completamente");
+  // Limpiar el tray al salir completamente
+  if (tray) {
+    tray.destroy();
+    tray = null;
+  }
 });
