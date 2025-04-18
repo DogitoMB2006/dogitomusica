@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
-  "main": "electron.config.cjs",
+  "main": "electron/main.cjs",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
@@ -25,6 +25,7 @@
     "@types/react-dom": "^19.0.4",
     "@vitejs/plugin-react": "^4.3.4",
     "concurrently": "^8.2.2",
+    "cross-env": "^7.0.3",
     "electron": "^30.5.1",
     "electron-builder": "^24.13.3",
     "eslint": "^9.22.0",
@@ -38,23 +39,27 @@
     "productName": "Dogito Music",
     "files": [
       "dist/**/*",
-      "electron/**/*"
+      "electron/**/*",
+      "public/**/*"
     ],
     "directories": {
       "output": "release"
     },
     "mac": {
-      "category": "public.app-category.music"
+      "category": "public.app-category.music",
+      "icon": "public/favicon.ico"
     },
     "win": {
-      "target": "nsis"
+      "target": "nsis",
+      "icon": "public/favicon.ico"
     },
     "linux": {
       "target": [
         "AppImage",
         "deb"
       ],
-      "category": "Audio"
+      "category": "Audio",
+      "icon": "public/favicon.ico"
     }
   }
 }
